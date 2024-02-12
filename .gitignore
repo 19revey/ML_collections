@@ -1,0 +1,9 @@
+__pycache__
+faiss_index
+pdfs
+*pdf
+.env
+*.jpg
+*.wav
+*.flac
+*DS_Store
