@@ -20,6 +20,7 @@ astrapy
 cassio
 datasets
 tiktoken
+pinecone-client
 
 
 #notebook
@@ -33,6 +34,7 @@ soundfile
 
 #image
 Pillow
+face-recognition
 
 #embedding
 BCEmbedding==0.1.1
