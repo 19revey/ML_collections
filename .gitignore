@@ -11,3 +11,10 @@ pdfs
 *JPG
 photos
 artifacts
+train
+test
+valid
+.streamlit
+data
+*mp4
+runs

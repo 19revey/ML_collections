@@ -1,6 +1,7 @@
 services:
   huggingface:
     build: .
+    shm_size: 8gb
     ports:
       - "8501:8501"
     volumes:
