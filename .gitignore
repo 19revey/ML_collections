@@ -18,3 +18,5 @@ valid
 data
 *mp4
 runs
+build/
+*info/
