@@ -1,0 +1,9 @@
+setup.py
+basic_transformer/__init__.py
+basic_transformer/basic_transformer.py
+basic_transformer.egg-info/PKG-INFO
+basic_transformer.egg-info/SOURCES.txt
+basic_transformer.egg-info/dependency_links.txt
+basic_transformer.egg-info/not-zip-safe
+basic_transformer.egg-info/requires.txt
+basic_transformer.egg-info/top_level.txt

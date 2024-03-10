@@ -1,5 +1,5 @@
 services:
-  huggingface:
+  ml:
     build: .
     shm_size: 8gb
     ports:

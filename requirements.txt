@@ -34,7 +34,8 @@ soundfile
 
 #image
 Pillow
-face-recognition
+# face-recognition
+matplotlib
 
 #embedding
-BCEmbedding==0.1.1
+# BCEmbedding==0.1.1
