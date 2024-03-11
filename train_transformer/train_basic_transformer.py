@@ -219,201 +219,112 @@ class TransformerEncoder(nn.Module):
 
         self.layers = nn.ModuleList([TransformerBlock(embed_dim, expansion_factor, n_heads) for i in range(num_layers)])
     
-    def forward(self, x):
+    def forward(self, x, y):
         embed_out = self.embedding_layer(x)
+        
         out = self.positional_encoder(embed_out)
         for layer in self.layers:
             out = layer(out,out,out)
-        return out
-
-
-class DecoderBlock(nn.Module):
-    def __init__(self, embed_dim, expansion_factor=4, n_heads=8):
-        super(DecoderBlock, self).__init__()
-
-        """
-        Args:
-           embed_dim: dimension of the embedding
-           expansion_factor: fator ehich determines output dimension of linear layer
-           n_heads: number of attention heads
         
-        """
-        self.attention = MultiHeadAttention(embed_dim, n_heads=8)
-        self.norm = nn.LayerNorm(embed_dim)
-        self.dropout = nn.Dropout(0.2)
-        self.transformer_block = TransformerBlock(embed_dim, expansion_factor, n_heads)       
-    
-    def forward(self, key, query, x,mask):
-        
-        """
-        Args:
-           key: key vector
-           query: query vector
-           value: value vector
-           mask: mask to be given for multi head attention 
-        Returns:
-           out: output of transformer block
-    
-        """
-        #we need to pass mask mask only to fst attention
-        attention = self.attention(x,x,x,mask=mask) #32x10x512
-        value = self.dropout(self.norm(attention + x))
-        
-        out = self.transformer_block(key, query, value)
-        
-        return out
+        if y is None:
+            loss=None
+        else:
+            B,T,C= out.shape
+            # print(f'out shape',out.shape)
+            out=out.view(B*T,C)
+            y=y.view(B*T)
+            # print(f'y',y.shape)
+            # print(f'out',out.shape)
+            loss=F.cross_entropy(out,y)
 
+        return out,loss  #32x10x512
 
-class TransformerDecoder(nn.Module):
-    def __init__(self, target_vocab_size, embed_dim, seq_len, num_layers=6, expansion_factor=4, n_heads=8):
-        super(TransformerDecoder, self).__init__()
-        """  
-        Args:
-           target_vocab_size: vocabulary size of taget
-           embed_dim: dimension of embedding
-           seq_len : length of input sequence
-           num_layers: number of encoder layers
-           expansion_factor: factor which determines number of linear layers in feed forward layer
-           n_heads: number of heads in multihead attention
-        
-        """
-        self.word_embedding = nn.Embedding(target_vocab_size, embed_dim)
-        self.position_embedding = PositionalEmbedding(seq_len, embed_dim)
-
-        self.layers = nn.ModuleList(
-            [
-                DecoderBlock(embed_dim, expansion_factor=4, n_heads=8) 
-                for _ in range(num_layers)
-            ]
-
-        )
-        self.fc_out = nn.Linear(embed_dim, target_vocab_size)
-        self.dropout = nn.Dropout(0.2)
-
-    def forward(self, x, enc_out, mask):
-        
-        """
-        Args:
-            x: input vector from target
-            enc_out : output from encoder layer
-            trg_mask: mask for decoder self attention
-        Returns:
-            out: output vector
-        """     
-        x = self.word_embedding(x)  #32x10x512
-        x = self.position_embedding(x) #32x10x512
-        x = self.dropout(x)
-     
-        for layer in self.layers:
-            x = layer(enc_out, x, enc_out, mask) 
-
-        out = F.softmax(self.fc_out(x),dim=-1)
-
-        return out
-
-
-class Transformer(nn.Module):
-    def __init__(self, embed_dim, src_vocab_size, target_vocab_size, seq_length,num_layers=6, expansion_factor=4, n_heads=8):
-        super(Transformer, self).__init__()
-        
-        """  
-        Args:
-           embed_dim:  dimension of embedding 
-           src_vocab_size: vocabulary size of source
-           target_vocab_size: vocabulary size of target
-           seq_length : length of input sequence
-           num_layers: number of encoder layers
-           expansion_factor: factor which determines number of linear layers in feed forward layer
-           n_heads: number of heads in multihead attention
-        
-        """
-        
-        self.target_vocab_size = target_vocab_size
-
-        self.encoder = TransformerEncoder(seq_length, src_vocab_size, embed_dim, num_layers=num_layers, expansion_factor=expansion_factor, n_heads=n_heads)
-        self.decoder = TransformerDecoder(target_vocab_size, embed_dim, seq_length, num_layers=num_layers, expansion_factor=expansion_factor, n_heads=n_heads)
-        
-    
-    def make_trg_mask(self, trg):
-        """
-        Args:
-            trg: target sequence
-        Returns:
-            trg_mask: target mask
-        """
-        batch_size, trg_len = trg.shape
-        # returns the lower triangular part of matrix filled with ones
-        trg_mask = torch.tril(torch.ones((trg_len, trg_len))).expand(
-            batch_size, 1, trg_len, trg_len
-        )
-        return trg_mask    
-
-    def decode(self,src,trg):
-        """
-        for inference
-        Args:
-            src: input to encoder 
-            trg: input to decoder
-        out:
-            out_labels : returns final prediction of sequence
-        """
-        trg_mask = self.make_trg_mask(trg)
-        enc_out = self.encoder(src)
-        out_labels = []
-        batch_size,seq_len = src.shape[0],src.shape[1]
-        #outputs = torch.zeros(seq_len, batch_size, self.target_vocab_size)
-        out = trg
-        for i in range(seq_len): #10
-            out = self.decoder(out,enc_out,trg_mask) #bs x seq_len x vocab_dim
-            # taking the last token
-            out = out[:,-1,:]
-     
-            out = out.argmax(-1)
-            out_labels.append(out.item())
-            out = torch.unsqueeze(out,axis=0)
-          
-        
-        return out_labels
-    
-    def forward(self, src, trg):
-        """
-        Args:
-            src: input to encoder 
-            trg: input to decoder
-        out:
-            out: final vector which returns probabilities of each target word
-        """
-        trg_mask = self.make_trg_mask(trg)
-        enc_out = self.encoder(src)
-   
-        outputs = self.decoder(trg, enc_out, trg_mask)
-        return outputs
 
 
 if __name__ == "__main__":
 
-    src_vocab_size = 11
-    target_vocab_size = 11
-    num_layers = 6
-    seq_length= 12
+    with open('input.txt', 'r', encoding='utf-8') as f:
+        text = f.read()
+
+    # here are all the unique characters that occur in this text
+    chars = sorted(list(set(text)))
+    vocab_size = len(chars)
+    # create a mapping from characters to integers
+    stoi = { ch:i for i,ch in enumerate(chars) }
+    itos = { i:ch for i,ch in enumerate(chars) }
+    encode = lambda s: [stoi[c] for c in s] # encoder: take a string, output a list of integers
+    decode = lambda l: ''.join([itos[i] for i in l]) # decoder: take a list of integers, output a string
+
+    # Train and test splits
+    data = torch.tensor(encode(text), dtype=torch.long)
+    n = int(0.9*len(data)) # first 90% will be train, rest val
+    train_data = data[:n]
+    val_data = data[n:]
+
+    batch_size = 4 # how many independent sequences will we process in parallel?
+    block_size = 8 # what is the maximum context length for predictions?
+    max_iters = 5000
+    eval_interval = 100
+    learning_rate = 1e-3
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    # device = 'cpu'
+    eval_iters = 200
+    n_embd = 256
+    n_head = 4
+    n_layer = 4
+    dropout = 0.0
 
 
-    # let 0 be sos token and 1 be eos token
-    src = torch.tensor([[0, 2, 5, 6, 4, 3, 9, 5, 2, 9, 10, 1], 
-                        [0, 2, 8, 7, 3, 4, 5, 6, 7, 2, 10, 1]])
-    target = torch.tensor([[0, 1, 7, 4, 3, 5, 9, 2, 8, 10, 9, 1], 
-                        [0, 1, 5, 6, 2, 4, 7, 6, 2, 8, 10, 1]])
+    def get_batch(split):
+        # generate a small batch of data of inputs x and targets y
+        data = train_data if split == 'train' else val_data
+        ix = torch.randint(len(data) - block_size, (batch_size,))
+        x = torch.stack([data[i:i+block_size] for i in ix])
+        y = torch.stack([data[i+1:i+block_size+1] for i in ix])
+        x, y = x.to(device), y.to(device)
+        return x, y
 
-    print(src.shape,target.shape)
-    # inference
-    # model = Transformer(embed_dim=512, src_vocab_size=src_vocab_size, 
-    #                     target_vocab_size=target_vocab_size, seq_length=seq_length, 
-    #                     num_layers=num_layers, expansion_factor=4, n_heads=8)
+
+    model = TransformerEncoder(seq_len=block_size, vocab_size=vocab_size, embed_dim=n_embd, num_layers=n_layer, expansion_factor=4, n_heads=n_head)
+    m = model.to(device)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)
+
+    input=get_batch("train")
+    print(m(input[0],input[1])[0].shape)
     
-    # seq_len, vocab_size, embed_dim, num_layers=6, expansion_factor=4, n_heads=8
-    model = TransformerEncoder(seq_len=seq_length, vocab_size=src_vocab_size, embed_dim=512, num_layers=6, expansion_factor=4, n_heads=8)                
-    print(model)
-    src = torch.tensor([[0, 2, 5, 6, 4, 3, 9, 5, 2, 9, 10, 1]])
-    trg = torch.tensor([[0]])
-    print(src.shape,target.shape)
-    out = model(src)
+
+    @torch.no_grad()
+    def estimate_loss():
+        out = {}
+        model.eval()
+        for split in ['train', 'val']:
+            losses = torch.zeros(eval_iters)
+            for k in range(eval_iters):
+                X, Y = get_batch(split)
+                logits, loss = model(X, Y)
+                losses[k] = loss.item()
+            out[split] = losses.mean()
+        model.train()
+        return out
+
+
+    for iter in range(max_iters):
+
+        # every once in a while evaluate the loss on train and val sets
+        if iter % eval_interval == 0 or iter == max_iters - 1:
+            losses = estimate_loss()
+            print(f"step {iter}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
+
+        # sample a batch of data
+        xb, yb = get_batch('train')
+
+        # evaluate the loss
+        logits, loss = model(xb, yb)
+        optimizer.zero_grad(set_to_none=True)
+        loss.backward()
+        optimizer.step()
+
+    # print(src.shape,target.shape)
+    #  model = TransformerEncoder(seq_len=seq_length, vocab_size=src_vocab_size, embed_dim=512, num_layers=6, expansion_factor=4, n_heads=8)                
+    # out=model(src,target)
+    # print(out[1])
