@@ -21,6 +21,8 @@ class Embedding(nn.Module):
             embed_dim: dimension of embeddings, i.e. d_model
         """
         super(Embedding, self).__init__()
+        print(vocab_size)
+        print(embed_dim)
         self.embed = nn.Embedding(vocab_size, embed_dim)
     def forward(self, x):
         """
@@ -176,6 +178,7 @@ class TransformerBlock(nn.Module):
 
         self.dropout1 = nn.Dropout(0.2)
         self.dropout2 = nn.Dropout(0.2)
+        self.register_buffer('tril', torch.tril(torch.ones(block_size, block_size)))
 
     def forward(self,key,query,value):
         
@@ -187,8 +190,8 @@ class TransformerBlock(nn.Module):
            norm2_out: output of transformer block
         
         """
-        
-        attention_out = self.attention(key,query,value)  #32x10x512
+        B,T,C = query.shape
+        attention_out = self.attention(key,query,value,self.tril[:T, :T])  #32x10x512
         attention_residual_out = attention_out + value  #32x10x512
         norm1_out = self.dropout1(self.norm1(attention_residual_out)) #32x10x512
 
@@ -216,32 +219,164 @@ class TransformerEncoder(nn.Module):
         
         self.embedding_layer = Embedding(vocab_size, embed_dim)
         self.positional_encoder = PositionalEmbedding(seq_len, embed_dim)
-
         self.layers = nn.ModuleList([TransformerBlock(embed_dim, expansion_factor, n_heads) for i in range(num_layers)])
-    
-    def forward(self, x, y):
+        self.lm_head= nn.Linear(embed_dim,vocab_size)
+
+    def forward(self, x, y=None):
         embed_out = self.embedding_layer(x)
         
         out = self.positional_encoder(embed_out)
         for layer in self.layers:
             out = layer(out,out,out)
         
+        out=self.lm_head(out)
+
         if y is None:
             loss=None
         else:
             B,T,C= out.shape
-            # print(f'out shape',out.shape)
             out=out.view(B*T,C)
             y=y.view(B*T)
-            # print(f'y',y.shape)
-            # print(f'out',out.shape)
             loss=F.cross_entropy(out,y)
 
         return out,loss  #32x10x512
+    
+    def generate(self, idx, max_new_tokens):
+        # idx is (B, T) array of indices in the current context
+        for _ in range(max_new_tokens):
+            # crop idx to the last block_size tokens
+            idx_cond = idx[:, -block_size:]
+            # get the predictions
+            logits, loss = self(idx_cond)
+            # focus only on the last time step
+            logits = logits[:, -1, :] # becomes (B, C)
+            # apply softmax to get probabilities
+            probs = F.softmax(logits, dim=-1) # (B, C)
+            # sample from the distribution
+            idx_next = torch.multinomial(probs, num_samples=1) # (B, 1)
+            # append sampled index to the running sequence
+            idx = torch.cat((idx, idx_next), dim=1) # (B, T+1)
+        return idx
 
+
+class DecoderBlock(nn.Module):
+    def __init__(self, embed_dim, expansion_factor=4, n_heads=8):
+        super(DecoderBlock, self).__init__()
+
+        """
+        Args:
+           embed_dim: dimension of the embedding
+           expansion_factor: fator ehich determines output dimension of linear layer
+           n_heads: number of attention heads
+        
+        """
+        # self.attention = MultiHeadAttention(embed_dim, n_heads=8)
+        # self.norm = nn.LayerNorm(embed_dim)
+        # self.dropout = nn.Dropout(0.2)
+        self.transformer_block = TransformerBlock(embed_dim, expansion_factor, n_heads)       
+    
+    def forward(self, x):
+        
+        """
+        Args:
+           key: key vector
+           query: query vector
+           value: value vector
+           mask: mask to be given for multi head attention 
+        Returns:
+           out: output of transformer block
+    
+        """
+        #we need to pass mask mask only to fst attention
+        attention = self.transformer_block(x,x,x) #32x10x512
+        # value = self.dropout(self.norm(attention + x))
+        
+        # out = self.transformer_block(key, query, value)
+        
+        return attention
+
+
+class TransformerDecoder(nn.Module):
+    def __init__(self, target_vocab_size, embed_dim, seq_len, num_layers=6, expansion_factor=4, n_heads=8):
+        super(TransformerDecoder, self).__init__()
+        """  
+        Args:
+           target_vocab_size: vocabulary size of taget
+           embed_dim: dimension of embedding
+           seq_len : length of input sequence
+           num_layers: number of encoder layers
+           expansion_factor: factor which determines number of linear layers in feed forward layer
+           n_heads: number of heads in multihead attention
+        
+        """
+        self.word_embedding = nn.Embedding(target_vocab_size, embed_dim)
+        self.position_embedding = PositionalEmbedding(seq_len, embed_dim)
+
+        self.layers = nn.ModuleList(
+            [
+                DecoderBlock(embed_dim, expansion_factor=4, n_heads=8) 
+                for _ in range(num_layers)
+            ]
+
+        )
+        self.fc_out = nn.Linear(embed_dim, target_vocab_size)
+        self.dropout = nn.Dropout(0.2)
+
+
+
+    def forward(self, x, y=None):
+        
+        """
+        Args:
+            x: input vector from target
+            enc_out : output from encoder layer
+            trg_mask: mask for decoder self attention
+        Returns:
+            out: output vector
+        """     
+        x = self.word_embedding(x)  #32x10x512
+        x = self.position_embedding(x) #32x10x512
+        x = self.dropout(x)
+     
+        for layer in self.layers:
+            x = layer(x) 
+
+        # out = F.softmax(self.fc_out(x))
+        out=self.fc_out(x)
+
+        if y is None:
+            loss=None
+        else:
+            B,T,C= out.shape
+            out=out.view(B*T,C)
+            y=y.view(B*T)
+            loss=F.cross_entropy(out,y)        
+
+        return out,loss
+    
+    def generate(self, idx, max_new_tokens):
+        # idx is (B, T) array of indices in the current context
+        for _ in range(max_new_tokens):
+            # print(idx)
+            # crop idx to the last block_size tokens
+            idx_cond = idx[:, -block_size:]
+            
+            # get the predictions
+            logits, loss = self(idx_cond)
+            # print(f"logits",logits.shape)
+            # focus only on the last time step
+            logits = logits[:, -1, :] # becomes (B, C)
+            # apply softmax to get probabilities
+            probs = F.softmax(logits, dim=-1) # (B, C)
+            # sample from the distribution
+            idx_next = torch.multinomial(probs, num_samples=1) # (B, 1)
+            # append sampled index to the running sequence
+            idx = torch.cat((idx, idx_next), dim=1) # (B, T+1)
+        return idx
 
 
 if __name__ == "__main__":
+    nn.TransformerEncoder
 
     with open('input.txt', 'r', encoding='utf-8') as f:
         text = f.read()
@@ -261,9 +396,9 @@ if __name__ == "__main__":
     train_data = data[:n]
     val_data = data[n:]
 
-    batch_size = 4 # how many independent sequences will we process in parallel?
-    block_size = 8 # what is the maximum context length for predictions?
-    max_iters = 5000
+    batch_size = 32 # how many independent sequences will we process in parallel?
+    block_size = 256 # what is the maximum context length for predictions?
+    max_iters = 5100
     eval_interval = 100
     learning_rate = 1e-3
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -272,7 +407,7 @@ if __name__ == "__main__":
     n_embd = 256
     n_head = 4
     n_layer = 4
-    dropout = 0.0
+    dropout = 0.2
 
 
     def get_batch(split):
@@ -285,12 +420,12 @@ if __name__ == "__main__":
         return x, y
 
 
-    model = TransformerEncoder(seq_len=block_size, vocab_size=vocab_size, embed_dim=n_embd, num_layers=n_layer, expansion_factor=4, n_heads=n_head)
-    m = model.to(device)
+    # model = TransformerEncoder(seq_len=block_size, vocab_size=vocab_size, embed_dim=n_embd, num_layers=n_layer, expansion_factor=4, n_heads=n_head)
+    model = TransformerDecoder(target_vocab_size=vocab_size, embed_dim=n_embd, seq_len=block_size, num_layers=n_layer, expansion_factor=4, n_heads=n_head)
+    
+    model = model.to(device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)
 
-    input=get_batch("train")
-    print(m(input[0],input[1])[0].shape)
     
 
     @torch.no_grad()
@@ -308,23 +443,32 @@ if __name__ == "__main__":
         return out
 
 
-    for iter in range(max_iters):
+    model.load_state_dict(torch.load('model_parameters.pth'))
 
-        # every once in a while evaluate the loss on train and val sets
-        if iter % eval_interval == 0 or iter == max_iters - 1:
-            losses = estimate_loss()
-            print(f"step {iter}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
+    # for iter in range(max_iters):
 
-        # sample a batch of data
-        xb, yb = get_batch('train')
+    #     # every once in a while evaluate the loss on train and val sets
+    #     if iter % eval_interval == 0 or iter == max_iters - 1:
+    #         losses = estimate_loss()
+    #         print(f"step {iter}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
 
-        # evaluate the loss
-        logits, loss = model(xb, yb)
-        optimizer.zero_grad(set_to_none=True)
-        loss.backward()
-        optimizer.step()
+    #     # sample a batch of data
+    #     xb, yb = get_batch('train')
+
+    #     # evaluate the loss
+    #     logits, loss = model(xb, yb)
+    #     optimizer.zero_grad(set_to_none=True)
+    #     loss.backward()
+    #     optimizer.step()
+
+
+    # torch.save(model.state_dict(), 'model_parameters.pth')
 
     # print(src.shape,target.shape)
     #  model = TransformerEncoder(seq_len=seq_length, vocab_size=src_vocab_size, embed_dim=512, num_layers=6, expansion_factor=4, n_heads=8)                
     # out=model(src,target)
     # print(out[1])
+        
+    context = torch.zeros((1, 1), dtype=torch.long, device=device)
+    print(decode(model.generate(context, max_new_tokens=500)[0].tolist()))
+    # print(model(context)[0].shape)
