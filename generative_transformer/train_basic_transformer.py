@@ -376,7 +376,6 @@ class TransformerDecoder(nn.Module):
 
 
 if __name__ == "__main__":
-    nn.TransformerEncoder
 
     with open('input.txt', 'r', encoding='utf-8') as f:
         text = f.read()

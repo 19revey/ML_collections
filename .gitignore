@@ -20,3 +20,5 @@ data
 runs
 build/
 *info/
+checkpoints/
+*egg-info
