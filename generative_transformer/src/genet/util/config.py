@@ -1,7 +1,7 @@
 from pathlib import Path
 from typing import Optional, Union
 
-from pydantic import BaseModel, root_validator
+from pydantic import BaseModel, model_validator
 
 __all__ = ["ModelConfigure", "TrainConfigure"]
 
@@ -16,6 +16,13 @@ class ModelConfigure(BaseModel):
     embed_dropout_prob: float = 0.1
     device: str = "auto"
 
+    # @model_validator
+    # def check_embedding_size_num_heads_ratio(cls, values):
+    #     num_heads = values.get("num_heads")
+    #     embedding_size = values.get("embedding_size")
+    #     if embedding_size % num_heads != 0:
+    #         raise ValueError(f"{embedding_size=} is not divisible by {num_heads=}")
+    #     return values
 
 
 class TrainConfigure(ModelConfigure):
@@ -27,3 +34,7 @@ class TrainConfigure(ModelConfigure):
     checkpoint_path: Union[str, Path] = Path("checkpoints")
     save_all_checkpoints: bool = False
     overwrite_checkpoints: bool = True
+
+    @property
+    def model_conf(self):
+        return ModelConfigure(**{k: v for k, v in self.model_dump().items() if k in ModelConfigure.model_fields})
