@@ -25,7 +25,7 @@ setup(name="genet",
       author='yduan',
       packages=find_packages("src"),
       package_dir={"": "src"},
-      install_requires=['torch>=1.0'],
+      install_requires=['torch>=1.0', 'python>=10.0'],
       zip_safe=False,
       cmdclass={
         'clean': CleanCommand,

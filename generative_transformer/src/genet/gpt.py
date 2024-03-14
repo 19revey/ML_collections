@@ -1,5 +1,4 @@
 from pathlib import Path
-from typing import List, Optional, Union
 
 import torch
 import torch.nn as nn
@@ -13,7 +12,7 @@ __all__ = ["GPT"]
 
 
 class GPT(nn.Module):
-    def __init__(self, config: Union[ModelConfigure, TrainConfigure]):
+    def __init__(self, config: ModelConfigure | TrainConfigure):
         super().__init__()
         self.token_embedding_table = nn.Embedding(config.vocab_size, config.embedding_size)
         # self.position_embedding_table = nn.Embedding(config.context_length, config.embedding_size)
@@ -37,7 +36,7 @@ class GPT(nn.Module):
         return sum(p.numel() for p in self.parameters())
 
     @classmethod
-    def from_checkpoint(cls, path: Union[str, Path], **kwargs):
+    def from_checkpoint(cls, path: str | Path, **kwargs):
         checkpoint = torch.load(path, **kwargs)
         config = checkpoint["model_config"]
         model = cls(ModelConfigure(**config))
@@ -45,7 +44,7 @@ class GPT(nn.Module):
         model.to(util.get_auto_device() if config["device"] == "auto" else config["device"])
         return model
 
-    def forward(self, x: torch.LongTensor, targets: Optional[torch.LongTensor] = None):
+    def forward(self, x: torch.LongTensor, targets: torch.LongTensor | None = None):
         token_embedding = self.token_embedding_table(x)  # (B, T, C)
         x = self.position_embedding_table(token_embedding)  # (T, C)
         # x = token_embedding + position_embedding  # (B, T, C)
@@ -62,11 +61,11 @@ class GPT(nn.Module):
     @torch.no_grad()
     def generate(
         self,
-        idx: Union[List[int], torch.LongTensor],
+        idx: list[int] | torch.LongTensor,
         num_generated_tokens: int,
         temperature: float = 1.0,
         do_sample: bool = False,
-        top_k: Optional[int] = None,
+        top_k: int | None = None,
         as_list: bool = False,
     ):
         idx = torch.as_tensor(idx, dtype=torch.long, device=self.device)[None, ...]
@@ -94,5 +93,5 @@ class GPT(nn.Module):
             self.train()
         return idx.cpu().squeeze().tolist() if as_list else idx
 
-    def save(self, path: Union[str, Path]):
+    def save(self, path:str | Path):
         torch.save(self.state_dict(), path)

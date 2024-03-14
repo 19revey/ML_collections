@@ -1,6 +1,5 @@
 import warnings
 from pathlib import Path
-from typing import Optional, Union
 
 import torch
 from torch.utils.data import DataLoader, Subset
@@ -19,7 +18,12 @@ warnings.simplefilter("ignore", TqdmExperimentalWarning)
 class Trainer:
     def __init__(self, config: TrainConfigure):
         self.config = config
-        self.model = GPT(config)
+        try:
+            self.model=GPT.from_checkpoint("checkpoints/best_model.ckpt")
+            print("load model")
+        except:
+            print("new model")
+            self.model = GPT(config)
         self.checkpoint_path = Path(self.config.checkpoint_path)
         self.optimizer = torch.optim.AdamW(self.model.parameters(), lr=config.learning_rate)
         self.device = util.get_auto_device() if config.device == "auto" else config.device
@@ -81,7 +85,7 @@ class Trainer:
             raise ValueError(f"{name} {context_length=} does not match {self.config.context_length=}")
 
     @classmethod
-    def from_checkpoint(cls, path: Union[str, Path]):
+    def from_checkpoint(cls, path: str | Path):
         checkpoint = torch.load(path)
         model_config = checkpoint["model_config"]
         model = GPT(ModelConfigure(**model_config))
@@ -93,7 +97,7 @@ class Trainer:
         trainer.optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
         return trainer
 
-    def train(self, dataset: DatasetType, validation_dataset: Optional[DatasetType] = None, shuffle: bool = True):
+    def train(self, dataset: DatasetType, validation_dataset: DatasetType | None = None, shuffle: bool = True):
         self._check_context_length(dataset, "training dataset")
         self.train_loader = DataLoader(dataset=dataset, batch_size=self.config.batch_size, shuffle=shuffle)
         total_iterations = self.config.num_epochs * len(self.train_loader)

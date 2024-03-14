@@ -1,5 +1,4 @@
 from pathlib import Path
-from typing import List, Union
 
 import torch
 from torch.utils.data import Dataset
@@ -8,7 +7,7 @@ from torch.utils.data import Dataset
 __all__ = ["TextCharacterDataset", "TextCharacterTokenizer"]
 
 class TextCharacterTokenizer:
-    def __init__(self, vocabulary: List[str]):
+    def __init__(self, vocabulary: list[str]):
         self.vocabulary = vocabulary
         self.vocab_size = len(self.vocabulary)
         self.str_to_int = {s: i for i, s in enumerate(self.vocabulary)}
@@ -20,7 +19,7 @@ class TextCharacterTokenizer:
         return cls(vocabulary)
 
     @classmethod
-    def from_file(cls, file_path: Union[str, Path]):
+    def from_file(cls, file_path: str | Path):
         with open(file_path, "r") as f:
             text_corpus = f.read()
         return cls.from_corpus(text_corpus)
@@ -28,12 +27,12 @@ class TextCharacterTokenizer:
     def encode(self, text: str):
         return [self.str_to_int[s] for s in text]
 
-    def decode(self, tokens: List[int]):
+    def decode(self, tokens: list[int]):
         return "".join([self.int_to_str[t] for t in tokens])    
 
 
 class TextCharacterDataset(Dataset):
-    def __init__(self, text_corpus: str, vocabulary: List[str], context_length: int):
+    def __init__(self, text_corpus: str, vocabulary: list[str], context_length: int):
         self.text_corpus = text_corpus
         self.vocabulary = vocabulary
         self.vocab_size = len(self.vocabulary)
@@ -41,7 +40,7 @@ class TextCharacterDataset(Dataset):
         self.tokenizer = TextCharacterTokenizer(vocabulary)
 
     @classmethod
-    def from_file(cls, file_path: Union[str, Path], vocabulary: List[str], context_length: int):
+    def from_file(cls, file_path: str | Path, vocabulary: list[str], context_length: int):
         with open(file_path, "r") as f:
             text_corpus = f.read()
         return cls(text_corpus, vocabulary, context_length)
