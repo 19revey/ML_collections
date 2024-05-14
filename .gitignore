@@ -22,3 +22,13 @@ build/
 *info/
 checkpoints/
 *egg-info
+data/
+notebook/
+wandb/
+datasets/
+*pth
+results/
+model/
+*pt
+*log
+*txt

@@ -1,6 +1,6 @@
 python-dotenv
-streamlit
-transformers
+# streamlit
+# transformers
 
 #pytorch
 torch
@@ -8,34 +8,37 @@ torchvision
 torchaudio
 
 #llm
-langchain
-langchain-community
-langchain-google-genai
-google.generativeai
-openai
-faiss-gpu
+# langchain
+# langchain-community
+# langchain-google-genai
+# google.generativeai
+# openai
+# faiss-gpu
 
 #vector database
-astrapy
-cassio
-datasets
-tiktoken
-pinecone-client
+# astrapy
+# cassio
+# datasets
+# tiktoken
+# pinecone-client
+llama-index
 
 
 #notebook
 ipykernel
+notebook
 
 #pdf
-pypdf
+# pypdf
 
 #voice
-soundfile
+# soundfile
 
 #image
-Pillow
+# Pillow
 # face-recognition
 matplotlib
+
 
 #embedding
 # BCEmbedding==0.1.1

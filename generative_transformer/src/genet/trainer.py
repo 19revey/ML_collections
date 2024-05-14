@@ -1,5 +1,7 @@
 import warnings
 from pathlib import Path
+import logging
+import wandb
 
 import torch
 from torch.utils.data import DataLoader, Subset
@@ -107,6 +109,20 @@ class Trainer:
                 dataset=validation_dataset, batch_size=self.config.batch_size, shuffle=True
             )
 
+        logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
+        logging.info(f'''Starting training:
+            Epochs:          {self.config.num_epochs}
+            Batch size:      {self.config.batch_size}
+            Learning rate:   {self.config.learning_rate}
+            Checkpoints:     {self.config.checkpoint_path}
+            Device:          {self.config.device}
+        ''')
+
+        experiment = wandb.init(project='transformer',config=self.config.model_dump())
+
+
+        global_step = 0
+
         with tqdm(total=total_iterations, desc=f"Training for {self.config.num_epochs} epochs:") as progress_bar:
 
             self.model.train()
@@ -144,6 +160,12 @@ class Trainer:
 
                     progress_bar.update(1)
 
+                    global_step += 1
+                    experiment.log({
+                        'train loss': self.loss.item(),
+                        'step': global_step,
+                        'epoch': epoch
+                    })
                 # log epoch loss and save checkpoint
                 average_loss = running_loss["epoch"] / len(self.train_loader)
                 self._print_epoch_loss(epoch, average_loss)

@@ -15,7 +15,8 @@ torchvision
 tqdm
 filterpy
 scikit-image
-lap
-streamlit
-streamlit-webrtc
-twilio
+numpy
+# lap
+# streamlit
+# streamlit-webrtc
+# twilio

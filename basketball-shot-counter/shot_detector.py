@@ -7,7 +7,7 @@ import math
 import numpy as np
 from utils import score, detect_down, detect_up, in_hoop_region, clean_hoop_pos, clean_ball_pos
 import logging
-from cap_from_youtube import cap_from_youtube
+# from cap_from_youtube import cap_from_youtube
 
 
 logging.basicConfig(filename='example.log', level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')

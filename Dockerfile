@@ -8,7 +8,7 @@ RUN apt-get update && apt-get install -y \
     software-properties-common \
     git \
     python3-pip \
-    && rm -rf /var/lib/apt/lists/*
+    && apt-get clean && rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*
 
 WORKDIR /app
 

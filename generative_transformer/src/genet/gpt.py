@@ -15,7 +15,6 @@ class GPT(nn.Module):
     def __init__(self, config: ModelConfigure | TrainConfigure):
         super().__init__()
         self.token_embedding_table = nn.Embedding(config.vocab_size, config.embedding_size)
-        # self.position_embedding_table = nn.Embedding(config.context_length, config.embedding_size)
         self.position_embedding_table = PositionalEmbedding(config)
         self.blocks = nn.Sequential(*[CasualAttentionBlock(config) for _ in range(config.num_blocks)])
         self.final_layer_norm = nn.LayerNorm(config.embedding_size)
